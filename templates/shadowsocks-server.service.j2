@@ -1,0 +1,21 @@
+#  This file is part of shadowsocks-rust.
+#
+#  This is a template unit file. Users may copy and rename the file into
+#  config directories to make new service instances. See systemd.unit(5)
+#  for details.
+
+[Unit]
+Description=Shadowsocks-rust Custom Server Service
+Documentation=https://github.com/shadowsocks/shadowsocks-rust
+After=network.target
+
+[Service]
+Type=simple
+User=nobody
+Group=nogroup
+LimitNOFILE=32768
+ExecStart={{ shadowsocks_dir }}/ssservice server --log-without-time -c {{ shadowsocks_config_dir }}/config.json
+
+[Install]
+WantedBy=multi-user.target
+

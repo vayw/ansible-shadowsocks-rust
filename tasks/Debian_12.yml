@@ -1,0 +1,9 @@
+---
+# setup tasks for Debian 12
+- name: install packages
+  tags: system
+  ansible.builtin.apt:
+    name: ["firewalld"]
+    state: present
+    update_cache: yes
+

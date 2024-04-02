@@ -1,0 +1,18 @@
+---
+# defaults file for shadowsocks
+
+shadowsocks_version: 1.18.2
+shadowsocks_dist: https://github.com/shadowsocks/shadowsocks-rust/releases/download/v{{shadowsocks_version}}/shadowsocks-v{{shadowsocks_version}}.x86_64-unknown-linux-gnu.tar.xz
+
+shadowsocks_dir: /opt/shadowsocks
+shadowsocks_config_dir: /etc/shadowsocks
+shadowsocks_secret: "{{ shadowsocks_config_dir }}/.key"
+
+shadowsocks_firewalld_service_zone: public
+
+shadowsocks_service_name: "shadowsocks-server"
+shadowsocks_service_file: "/etc/systemd/system/{{ shadowsocks_service_name }}.service"
+
+# SERVER defaults:
+shadowsocks_encryption: aes-256-gcm
+shadowsocks_port: 30322

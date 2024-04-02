@@ -1,0 +1,128 @@
+---
+# tasks file for wireguard
+- name: system setup
+  tags: system
+  include_tasks: "{{ ansible_distribution }}_{{ ansible_distribution_major_version }}.yml"
+
+- name: check directory for binaries
+  ansible.builtin.file:
+    path: "{{ shadowsocks_dir }}"
+    owner: root
+    mode: "0755"
+    state: directory
+
+- name: check config directory
+  ansible.builtin.file:
+    path: "{{ shadowsocks_config_dir }}"
+    owner: root
+    mode: "0755"
+    state: directory
+
+- name: install shadowsocks-rust
+  tags: [system, install]
+  ansible.builtin.unarchive:
+    src: "{{ shadowsocks_dist }}"
+    dest: "{{ shadowsocks_dir }}"
+    owner: root
+    group: root
+    remote_src: yes
+    creates: "{{ shadowsocks_dir }}/ssserver"
+
+- name: read secret if presented
+  ansible.builtin.slurp:
+    src: "{{ shadowsocks_secret }}"
+  register: ss_keyfile
+  changed_when: false
+  ignore_errors: yes
+
+- name: generate server key
+  tags: [config]
+  when:
+    - ss_keyfile.failed
+  block:
+    - name: Generate secret key
+      ansible.builtin.command: "{{ shadowsocks_dir }}/ssservice genkey --encrypt-method {{ shadowsocks_encryption }}"
+      register: ss_key
+      changed_when: false
+
+    - name: write key
+      ansible.builtin.copy:
+        content: "{{ ss_key.stdout }}"
+        dest: "{{ shadowsocks_config_dir }}/.key"
+        mode: "0600"
+
+    - name: Set private key fact
+      ansible.builtin.set_fact:
+        ss_secret_key: "{{ ss_key.stdout }}"
+
+- name: Set private key fact from file
+  when: not ss_keyfile.failed
+  ansible.builtin.set_fact:
+    ss_secret_key: "{{ ss_keyfile['content'] | b64decode }}"
+
+- name: render shadowsocks config
+  tags: [config]
+  ansible.builtin.template:
+    src: config.json.j2
+    dest: "{{ shadowsocks_config_dir }}/config.json"
+    owner: root
+    group: root
+    mode: 0644
+    force: yes
+  notify:
+    - reload_service
+
+- name: netfiler and ip forwarding configuration
+  block:
+    - name: Add Shadowsocks as a service to FirewallD
+      template:
+        src: firewalld.xml.j2
+        dest: /etc/firewalld/services/shadowsocks.xml
+        owner: root
+        group: root
+        mode: 0644
+      register: firewalld_service
+
+    - name: Reload firewalld to add/update wireguard service
+      ansible.builtin.command: "firewall-cmd --reload"
+      when: firewalld_service.changed
+
+    - name: Allow WireGuard service for FirewallD zone
+      firewalld:
+        zone: "{{ shadowsocks_firewalld_service_zone }}"
+        service: shadowsocks
+        state: enabled
+        permanent: yes
+        immediate: yes
+
+- name: setup service
+  tags: [service]
+  block:
+    - name: render service file
+      ansible.builtin.template:
+        src: shadowsocks-server.service.j2
+        dest: "{{ shadowsocks_service_file }}"
+        owner: root
+        group: root
+        mode: 0600
+        force: yes
+      notify:
+        - reload_systemd
+        - reload_service
+
+    - name: enable service
+      systemd:
+        name: "{{ shadowsocks_service_name }}"
+        enabled: yes
+        state: started
+
+- name: generate connection string
+  tags: [client, setup]
+  block:
+    - name: generate
+      ansible.builtin.command: "{{ shadowsocks_dir }}/ssurl -e {{ shadowsocks_config_dir }}/config.json"
+      register: ssurl
+
+    - name: print
+      ansible.builtin.debug:
+        msg: "{{ ssurl.stdout }}"

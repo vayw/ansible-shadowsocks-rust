@@ -1,0 +1,10 @@
+---
+# handlers file for pdns
+- name: reload_systemd
+  systemd:
+    daemon_reload: yes
+
+- name: reload_service
+  systemd:
+    name: "{{ shadowsocks_service_name }}"
+    state: restarted

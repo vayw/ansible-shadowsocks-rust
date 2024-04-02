@@ -1,0 +1,6 @@
+{
+  "server": "{{ ansible_default_ipv4.address }}",
+  "server_port": {{ shadowsocks_port }},
+  "password": "{{ ss_secret_key }}",
+  "method": "{{ shadowsocks_encryption }}"
+}

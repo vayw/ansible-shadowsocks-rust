@@ -1,7 +1,7 @@
 Role Name
 =========
 
-A brief description of the role goes here.
+Simple shadowsocks proxy role with v2ray plugin support (without cert management)
 
 Requirements
 ------------
@@ -11,28 +11,41 @@ Any pre-requisites that may not be covered by Ansible itself or the role should 
 Role Variables
 --------------
 
-A description of the settable variables for this role should go here, including any variables that are in defaults/main.yml, vars/main.yml, and any variables that can/should be set via parameters to the role. Any variables that are read from other roles and/or the global scope (ie. hostvars, group vars, etc.) should be mentioned here as well.
+shadowsocks_version: shadowsocks rust dist version
+shadowsocks_dist: https://github.com/shadowsocks/shadowsocks-rust/releases/download/v{{shadowsocks_version}}/shadowsocks-v{{shadowsocks_version}}.x86_64-unknown-linux-gnu.tar.xz
+
+shadowsocks_dir: /opt/shadowsocks - directory to store binary
+shadowsocks_config_dir: /etc/shadowsocks - config dir
+shadowsocks_secret: "{{ shadowsocks_config_dir }}/.key" - client auth password file
+
+shadowsocks_user: shadowsocks - username for systemd service
+shadowsocks_firewalld_service_zone: public
+
+shadowsocks_service_name: "shadowsocks-server" - systemd service name
+shadowsocks_service_file: "/etc/systemd/system/{{ shadowsocks_service_name }}.service"
+
+# SERVER defaults:
+shadowsocks_encryption: aes-256-gcm
+shadowsocks_port: 30322
+
+# V2RAY
+shadowsocks_v2ray: true
+shadowsocks_v2ray_host: none
+shadowsocks_v2ray_tls: true
+shadowsocks_v2ray_version: 1.3.2
+shadowsocks_v2ray_dist: https://github.com/shadowsocks/v2ray-plugin/releases/download/v{{shadowsocks_v2ray_version}}/v2ray-plugin-linux-amd64-v{{shadowsocks_v2ray_version}}.tar.gz
+
+shadowsocks_v2ray_tls_cert: None
+shadowsocks_v2ray_tls_key: None
+shadowsocks_v2ray_tls_setacl: false
 
 Dependencies
 ------------
 
-A list of other roles hosted on Galaxy should go here, plus any details in regards to parameters that may need to be set for other roles, or variables that are used from other roles.
+-
 
-Example Playbook
-----------------
-
-Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
-
-    - hosts: servers
-      roles:
-         - { role: username.rolename, x: 42 }
 
 License
 -------
 
 BSD
-
-Author Information
-------------------
-
-An optional section for the role authors to include contact information, or a website (HTML is not allowed).

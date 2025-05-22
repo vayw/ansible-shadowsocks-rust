@@ -11,10 +11,13 @@ After=network.target
 
 [Service]
 Type=simple
-User=nobody
+User={{ shadowsocks_user }}
 Group=nogroup
 LimitNOFILE=32768
 ExecStart={{ shadowsocks_dir }}/ssservice server --log-without-time -c {{ shadowsocks_config_dir }}/config.json
+{% if shadowsocks_port < 1000 %}
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+{% endif %}
 
 [Install]
 WantedBy=multi-user.target

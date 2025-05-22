@@ -1,0 +1,22 @@
+---
+- name: installing v2ray plugin
+  tags: [install, v2ray]
+  ansible.builtin.unarchive:
+    src: "{{ shadowsocks_v2ray_dist }}"
+    dest: "{{ shadowsocks_dir }}"
+    owner: root
+    group: root
+    remote_src: yes
+    creates: "{{ shadowsocks_dir }}/v2ray-plugin_linux_amd64"
+
+- name: set acl for tls
+  when: shadowsocks_v2ray_tls_setacl
+  ansible.posix.acl:
+    path: "{{ item }}"
+    entity: "{{ shadowsocks_user }}"
+    etype: user
+    permissions: r
+    state: present
+  loop:
+    - "{{ shadowsocks_v2ray_tls_key }}"
+    - "{{ shadowsocks_v2ray_tls_cert }}"

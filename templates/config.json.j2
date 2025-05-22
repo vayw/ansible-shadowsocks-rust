@@ -1,6 +1,15 @@
+{% if shadowsocks_v2ray and shadowsocks_v2ray_tls %}
+{% set v2ray_opts="server;tls;host=" + shadowsocks_v2ray_host + ";key=" + shadowsocks_v2ray_tls_key + ";cert=" + shadowsocks_v2ray_tls_cert %}
+{% elif shadowsocks_v2ray and not shadowsocks_v2ray_tls %}
+{% set v2ray_opts="server;host=" + shadowsocks_v2ray_host %}
+{% endif %}
 {
   "server": "{{ ansible_default_ipv4.address }}",
   "server_port": {{ shadowsocks_port }},
+{% if shadowsocks_v2ray %}
+  "plugin": "{{ shadowsocks_dir }}/v2ray-plugin_linux_amd64",
+  "plugin_opts": "{{ v2ray_opts }}",
+{% endif %}
   "password": "{{ ss_secret_key }}",
   "method": "{{ shadowsocks_encryption }}"
 }

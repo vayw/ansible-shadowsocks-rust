@@ -1,5 +1,4 @@
 ---
-# tasks file for wireguard
 - name: system setup
   tags: system
   include_tasks: "{{ ansible_distribution }}_{{ ansible_distribution_major_version }}.yml"
@@ -27,6 +26,19 @@
     group: root
     remote_src: yes
     creates: "{{ shadowsocks_dir }}/ssserver"
+
+- name: install v2ray plugin
+  tags: [install, v2ray]
+  when:
+    - shadowsocks_v2ray
+  include_tasks: v2ray.yml
+
+- name: Add the user
+  ansible.builtin.user:
+    name: "{{ shadowsocks_user }}"
+    comment: shadowsocks server user
+    shell: "/usr/bin/false"
+    password: "!"
 
 - name: read secret if presented
   ansible.builtin.slurp:

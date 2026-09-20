@@ -4,12 +4,12 @@
 {% set v2ray_opts="server;host=" + shadowsocks_v2ray_host %}
 {% endif %}
 {
-  "server": "{{ ansible_default_ipv4.address }}",
+  "server": {{ shadowsocks_bind_address | to_json }},
   "server_port": {{ shadowsocks_port }},
 {% if shadowsocks_v2ray %}
-  "plugin": "{{ shadowsocks_dir }}/v2ray-plugin_linux_amd64",
-  "plugin_opts": "{{ v2ray_opts }}",
+  "plugin": {{ (shadowsocks_dir + '/v2ray-plugin_linux_amd64') | to_json }},
+  "plugin_opts": {{ v2ray_opts | to_json }},
 {% endif %}
-  "password": "{{ ss_secret_key }}",
-  "method": "{{ shadowsocks_encryption }}"
+  "password": {{ ss_secret_key | trim | to_json }},
+  "method": {{ shadowsocks_encryption | to_json }}
 }

@@ -1,51 +1,50 @@
-Role Name
-=========
+# Shadowsocks Rust server
 
-Simple shadowsocks proxy role with v2ray plugin support (without cert management)
+Deploys a Shadowsocks Rust server with optional v2ray-plugin. The role supports
+only x86_64 hosts running Debian 12 or Ubuntu 26.04.
 
-Requirements
-------------
+## Requirements
 
-Any pre-requisites that may not be covered by Ansible itself or the role should be mentioned here. For instance, if the role uses the EC2 module, it may be a good idea to mention in this section that the boto package is required.
+Install the required Ansible collection from the parent `ansible` directory:
 
-Role Variables
---------------
+```bash
+ansible-galaxy collection install -r requirements.yml
+```
 
-shadowsocks_version: shadowsocks rust dist version
-shadowsocks_dist: https://github.com/shadowsocks/shadowsocks-rust/releases/download/v{{shadowsocks_version}}/shadowsocks-v{{shadowsocks_version}}.x86_64-unknown-linux-gnu.tar.xz
+The role installs `firewalld` and `acl` itself. It manages firewall access for
+both TCP and UDP on `shadowsocks_port`.
 
-shadowsocks_dir: /opt/shadowsocks - directory to store binary
-shadowsocks_config_dir: /etc/shadowsocks - config dir
-shadowsocks_secret: "{{ shadowsocks_config_dir }}/.key" - client auth password file
+## Important variables
 
-shadowsocks_user: shadowsocks - username for systemd service
-shadowsocks_firewalld_service_zone: public
+- `shadowsocks_bind_address` — address on which the server listens; defaults to
+  `0.0.0.0`.
+- `shadowsocks_port` and `shadowsocks_encryption` — server port and cipher.
+- `shadowsocks_v2ray_*` — v2ray-plugin settings. With TLS enabled, provide
+  `shadowsocks_v2ray_host`, `shadowsocks_v2ray_tls_cert`, and
+  `shadowsocks_v2ray_tls_key`.
+- `shadowsocks_checksum` and `shadowsocks_v2ray_checksum` — SHA-256 checksums
+  for the pinned release archives. Change them together with the corresponding
+  version or URL.
+- `shadowsocks_print_connection_url` — defaults to `false`. Set it only for an
+  intentional, interactive retrieval of the credential-bearing connection URL.
 
-shadowsocks_service_name: "shadowsocks-server" - systemd service name
-shadowsocks_service_file: "/etc/systemd/system/{{ shadowsocks_service_name }}.service"
+The generated configuration is owned by `root:shadowsocks` with mode `0640`.
+The generated key remains readable only by root.
 
-# SERVER defaults:
-shadowsocks_encryption: aes-256-gcm
-shadowsocks_port: 30322
+## Example
 
-# V2RAY
-shadowsocks_v2ray: true
-shadowsocks_v2ray_host: none
-shadowsocks_v2ray_tls: true
-shadowsocks_v2ray_version: 1.3.2
-shadowsocks_v2ray_dist: https://github.com/shadowsocks/v2ray-plugin/releases/download/v{{shadowsocks_v2ray_version}}/v2ray-plugin-linux-amd64-v{{shadowsocks_v2ray_version}}.tar.gz
+```yaml
+- hosts: fornex
+  roles:
+    - role: shadowsocks
+      vars:
+        shadowsocks_port: 443
+        shadowsocks_v2ray_host: example.com
+        shadowsocks_v2ray_tls_cert: /opt/tls/example.com.crt
+        shadowsocks_v2ray_tls_key: /opt/tls/example.com.key
+        shadowsocks_v2ray_tls_setacl: true
+```
 
-shadowsocks_v2ray_tls_cert: None
-shadowsocks_v2ray_tls_key: None
-shadowsocks_v2ray_tls_setacl: false
+## License
 
-Dependencies
-------------
-
--
-
-
-License
--------
-
-BSD
+Apache-2.0

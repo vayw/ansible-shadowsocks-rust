@@ -1,37 +1,18 @@
 ---
-- name: system setup
+- name: Validate supported operating system
+  ansible.builtin.assert:
+    that:
+      - >-
+        (ansible_facts['distribution'] == 'Debian' and ansible_facts['distribution_major_version'] == '12')
+        or (ansible_facts['distribution'] == 'Ubuntu' and ansible_facts['distribution_major_version'] == '26')
+      - ansible_facts['architecture'] == 'x86_64'
+    fail_msg: >-
+      This role supports only Debian 12 and Ubuntu 26.04 on x86_64.
+
+- name: System setup
   tags: system
-  include_tasks: "{{ ansible_distribution }}_{{ ansible_distribution_major_version }}.yml"
-
-- name: check directory for binaries
-  ansible.builtin.file:
-    path: "{{ shadowsocks_dir }}"
-    owner: root
-    mode: "0755"
-    state: directory
-
-- name: check config directory
-  ansible.builtin.file:
-    path: "{{ shadowsocks_config_dir }}"
-    owner: root
-    mode: "0755"
-    state: directory
-
-- name: install shadowsocks-rust
-  tags: [system, install]
-  ansible.builtin.unarchive:
-    src: "{{ shadowsocks_dist }}"
-    dest: "{{ shadowsocks_dir }}"
-    owner: root
-    group: root
-    remote_src: yes
-    creates: "{{ shadowsocks_dir }}/ssserver"
-
-- name: install v2ray plugin
-  tags: [install, v2ray]
-  when:
-    - shadowsocks_v2ray
-  include_tasks: v2ray.yml
+  ansible.builtin.include_tasks: >-
+    {{ ansible_facts['distribution'] }}_{{ ansible_facts['distribution_major_version'] }}.yml
 
 - name: Add the user
   ansible.builtin.user:
@@ -39,38 +20,111 @@
     comment: shadowsocks server user
     shell: "/usr/bin/false"
     password: "!"
+    system: true
+    create_home: false
+    groups: "{{ shadowsocks_additional_groups }}"
+    append: true
 
-- name: read secret if presented
+- name: Create directory for binaries
+  ansible.builtin.file:
+    path: "{{ shadowsocks_dir }}"
+    owner: root
+    mode: "0755"
+    state: directory
+
+- name: Create configuration directory
+  ansible.builtin.file:
+    path: "{{ shadowsocks_config_dir }}"
+    owner: root
+    group: "{{ shadowsocks_user }}"
+    mode: "0750"
+    state: directory
+
+- name: Create download cache directory
+  ansible.builtin.file:
+    path: "{{ shadowsocks_cache_dir }}"
+    owner: root
+    group: root
+    mode: "0755"
+    state: directory
+
+- name: Download shadowsocks-rust archive
+  tags: [system, install]
+  ansible.builtin.get_url:
+    url: "{{ shadowsocks_dist }}"
+    dest: "{{ shadowsocks_cache_dir }}/shadowsocks-v{{ shadowsocks_version }}.{{ shadowsocks_arch }}.tar.xz"
+    checksum: "{{ shadowsocks_checksum }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: shadowsocks_download
+
+- name: Check installed shadowsocks-rust binary
+  ansible.builtin.stat:
+    path: "{{ shadowsocks_dir }}/ssserver"
+  register: shadowsocks_binary
+
+- name: Install or update shadowsocks-rust
+  tags: [system, install]
+  ansible.builtin.unarchive:
+    src: "{{ shadowsocks_cache_dir }}/shadowsocks-v{{ shadowsocks_version }}.{{ shadowsocks_arch }}.tar.xz"
+    dest: "{{ shadowsocks_dir }}"
+    owner: root
+    group: root
+    remote_src: true
+    extra_opts:
+      - --overwrite
+  when: shadowsocks_download.changed or not shadowsocks_binary.stat.exists
+
+- name: install v2ray plugin
+  tags: [install, v2ray]
+  when:
+    - shadowsocks_v2ray
+  ansible.builtin.include_tasks: v2ray.yml
+
+- name: Check whether the secret exists
+  ansible.builtin.stat:
+    path: "{{ shadowsocks_secret }}"
+  register: ss_keyfile_stat
+
+- name: Read existing secret
   ansible.builtin.slurp:
     src: "{{ shadowsocks_secret }}"
   register: ss_keyfile
   changed_when: false
-  ignore_errors: yes
+  when: ss_keyfile_stat.stat.exists
+  no_log: true
 
 - name: generate server key
   tags: [config]
   when:
-    - ss_keyfile.failed
+    - not ss_keyfile_stat.stat.exists
   block:
     - name: Generate secret key
       ansible.builtin.command: "{{ shadowsocks_dir }}/ssservice genkey --encrypt-method {{ shadowsocks_encryption }}"
       register: ss_key
       changed_when: false
+      no_log: true
 
     - name: write key
       ansible.builtin.copy:
         content: "{{ ss_key.stdout }}"
         dest: "{{ shadowsocks_config_dir }}/.key"
+        owner: root
+        group: root
         mode: "0600"
+      no_log: true
 
     - name: Set private key fact
       ansible.builtin.set_fact:
         ss_secret_key: "{{ ss_key.stdout }}"
+      no_log: true
 
-- name: Set private key fact from file
-  when: not ss_keyfile.failed
+- name: Set private key fact from existing file
+  when: ss_keyfile_stat.stat.exists
   ansible.builtin.set_fact:
     ss_secret_key: "{{ ss_keyfile['content'] | b64decode }}"
+  no_log: true
 
 - name: render shadowsocks config
   tags: [config]
@@ -78,16 +132,17 @@
     src: config.json.j2
     dest: "{{ shadowsocks_config_dir }}/config.json"
     owner: root
-    group: root
-    mode: 0644
+    group: "{{ shadowsocks_user }}"
+    mode: "0640"
     force: yes
+  no_log: true
   notify:
     - reload_service
 
 - name: netfiler and ip forwarding configuration
   block:
     - name: Add Shadowsocks as a service to FirewallD
-      template:
+      ansible.builtin.template:
         src: firewalld.xml.j2
         dest: /etc/firewalld/services/shadowsocks.xml
         owner: root
@@ -95,12 +150,12 @@
         mode: 0644
       register: firewalld_service
 
-    - name: Reload firewalld to add/update wireguard service
+    - name: Reload firewalld to add or update shadowsocks service
       ansible.builtin.command: "firewall-cmd --reload"
       when: firewalld_service.changed
 
-    - name: Allow WireGuard service for FirewallD zone
-      firewalld:
+    - name: Allow Shadowsocks service for FirewallD zone
+      ansible.posix.firewalld:
         zone: "{{ shadowsocks_firewalld_service_zone }}"
         service: shadowsocks
         state: enabled
@@ -123,18 +178,22 @@
         - reload_service
 
     - name: enable service
-      systemd:
+      ansible.builtin.systemd:
         name: "{{ shadowsocks_service_name }}"
         enabled: yes
         state: started
+        daemon_reload: true
 
-- name: generate connection string
+- name: Generate connection string
   tags: [client, setup]
+  when: shadowsocks_print_connection_url | bool
   block:
     - name: generate
       ansible.builtin.command: "{{ shadowsocks_dir }}/ssurl -e {{ shadowsocks_config_dir }}/config.json"
       register: ssurl
+      changed_when: false
+      no_log: true
 
-    - name: print
+    - name: Print connection string on explicit request
       ansible.builtin.debug:
         msg: "{{ ssurl.stdout }}"

@@ -1,22 +1,53 @@
 ---
-- name: installing v2ray plugin
+- name: Download v2ray-plugin archive
+  tags: [install, v2ray]
+  ansible.builtin.get_url:
+    url: "{{ shadowsocks_v2ray_dist }}"
+    dest: "{{ shadowsocks_cache_dir }}/v2ray-plugin-linux-amd64-v{{ shadowsocks_v2ray_version }}.tar.gz"
+    checksum: "{{ shadowsocks_v2ray_checksum }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: shadowsocks_v2ray_download
+
+- name: Check installed v2ray-plugin binary
+  ansible.builtin.stat:
+    path: "{{ shadowsocks_dir }}/v2ray-plugin_linux_amd64"
+  register: shadowsocks_v2ray_binary
+
+- name: Install or update v2ray-plugin
   tags: [install, v2ray]
   ansible.builtin.unarchive:
-    src: "{{ shadowsocks_v2ray_dist }}"
+    src: "{{ shadowsocks_cache_dir }}/v2ray-plugin-linux-amd64-v{{ shadowsocks_v2ray_version }}.tar.gz"
     dest: "{{ shadowsocks_dir }}"
     owner: root
     group: root
-    remote_src: yes
-    creates: "{{ shadowsocks_dir }}/v2ray-plugin_linux_amd64"
+    remote_src: true
+    extra_opts:
+      - --overwrite
+  when: shadowsocks_v2ray_download.changed or not shadowsocks_v2ray_binary.stat.exists
 
 - name: set acl for tls
   when: shadowsocks_v2ray_tls_setacl
-  ansible.posix.acl:
-    path: "{{ item }}"
-    entity: "{{ shadowsocks_user }}"
-    etype: user
-    permissions: r
-    state: present
-  loop:
-    - "{{ shadowsocks_v2ray_tls_key }}"
-    - "{{ shadowsocks_v2ray_tls_cert }}"
+  block:
+    - name: Allow Shadowsocks to traverse TLS certificate directories
+      ansible.posix.acl:
+        path: "{{ item | dirname }}"
+        entity: "{{ shadowsocks_user }}"
+        etype: user
+        permissions: x
+        state: present
+      loop:
+        - "{{ shadowsocks_v2ray_tls_key }}"
+        - "{{ shadowsocks_v2ray_tls_cert }}"
+
+    - name: Allow Shadowsocks to read TLS material
+      ansible.posix.acl:
+        path: "{{ item }}"
+        entity: "{{ shadowsocks_user }}"
+        etype: user
+        permissions: r
+        state: present
+      loop:
+        - "{{ shadowsocks_v2ray_tls_key }}"
+        - "{{ shadowsocks_v2ray_tls_cert }}"

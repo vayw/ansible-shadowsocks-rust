@@ -1,11 +1,10 @@
 ---
-# setup tasks for Debian 12
-- name: install packages
+- name: Install required packages
   tags: system
   ansible.builtin.apt:
     name: ["acl", "firewalld"]
     state: present
-    update_cache: yes
+    update_cache: true
 
 - name: Ensure firewalld is enabled and running
   ansible.builtin.systemd:
